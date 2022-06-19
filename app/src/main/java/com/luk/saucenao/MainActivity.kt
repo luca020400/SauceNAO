@@ -3,19 +3,24 @@ package com.luk.saucenao
 import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.provider.MediaStore
 import android.util.AttributeSet
 import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.Toast
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatSpinner
+import androidx.core.content.FileProvider
 import androidx.core.content.res.getTextOrThrow
 import androidx.core.util.Pair
 import com.afollestad.materialdialogs.MaterialDialog
@@ -51,6 +56,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private var getResultsFromCameraUri: Uri? = null
+    private val getResultsFromCamera =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult? ->
+            result?.let {
+                if (it.resultCode == RESULT_OK) {
+                    waitForResults(getResultsFromCameraUri!!)
+                }
+            }
+        }
+
     private val getResultsFromFile =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
             uri?.let { waitForResults(it) }
@@ -63,6 +78,29 @@ class MainActivity : AppCompatActivity() {
         val selectImageButton = findViewById<Button>(R.id.select_image)
         selectImageButton.setOnClickListener {
             getResultsFromFile.launch("image/*")
+        }
+
+        val cameraButton = findViewById<ImageView>(R.id.camera)
+        cameraButton.setOnClickListener {
+            getResultsFromCamera.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                getResultsFromCameraUri = FileProvider.getUriForFile(
+                    this@MainActivity,
+                    "${packageName}.FileProvider",
+                    getExternalFilesDir(Environment.DIRECTORY_PICTURES)!!.resolve("file.jpg")
+                )
+
+                // Grant Uri R/W permissions for applications that handle these activities
+                packageManager.queryIntentActivities(this, PackageManager.MATCH_DEFAULT_ONLY)
+                    .forEach {
+                        grantUriPermission(
+                            it.activityInfo.packageName,
+                            getResultsFromCameraUri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                    }
+
+                putExtra(MediaStore.EXTRA_OUTPUT, getResultsFromCameraUri)
+            })
         }
 
         selectDatabasesSpinner.onPerformClick = {
